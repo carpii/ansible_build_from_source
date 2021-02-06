@@ -1,0 +1,98 @@
+# -- generic task to download, build and install from a source archive
+# -- aims to be idempotent, robust and customisable, whilst also ensuring a rebuild occurs if reconfigured or any build step is changed
+
+# prepare local task vars
+- block: 
+  - name: "{{ compile.label|upper }} - determine archive name from version"
+    set_fact: 
+      local_source_base_name: "{{ compile['source_base_name'] | replace('[VERSION]', compile['source_version'] ) }}"
+  - name: "{{ compile.label|upper }} - determine source path"
+    set_fact:
+      local_source_path: "/usr/local/src/{{ local_source_base_name }}"
+      local_tar_filename: "{{ local_source_base_name }}.{{ compile['source_archive_extension'] }}"
+  - name: "{{ compile.label|upper }} - determine remote archive url"
+    set_fact:
+      local_tar_url:  "{{ compile['source_base_url'] }}/{{ local_tar_filename }}"
+
+# download and extract source archive
+- block:
+  - name: "{{ compile.label|upper }} - Check if {{ local_tar_filename }} already exists"
+    stat:
+      path: "/usr/local/src/{{ local_tar_filename }}"
+    register: local_source_tar
+  - name: "{{ compile.label|upper }} - Downloading {{ local_tar_url }}"
+    get_url:
+      url: "{{ local_tar_url }}"
+      dest: "/usr/local/src/"
+      mode: '0644'
+      force: no
+    register: local_tar_downloaded
+    when: not local_source_tar.stat.exists
+  - name: "{{ compile.label|upper }} - Check if {{ local_source_base_name }} dir exists"
+    stat:
+      path: "/usr/local/src/{{ local_source_base_name }}"
+    register: local_source_dir
+  - name: "{{ compile.label|upper }} - Extract {{ local_tar_filename }}"
+    unarchive:
+      src: "/usr/local/src/{{ local_tar_filename }}"
+      dest: "/usr/local/src/"
+      remote_src: yes
+    when: (local_tar_downloaded.changed) or (not local_source_dir.stat.exists)
+
+# prepare config.ansible
+- block: 
+  - name: "{{ compile.label|upper }} - Prepare header lines"
+    set_fact:
+      local_build_header: 
+        - "#!/bin/sh"
+        - "# ansible managed"
+        - "# version: {{ compile['source_version'] }}"
+        - "# source: {{ local_tar_url }}"
+  - name: "{{ compile.label|upper }} - Merge header steps"
+    set_fact:
+      local_build_lines: "{{ local_build_header }}"
+  - name: "{{ compile.label|upper }} - Merge pre_configure steps (if present)"
+    set_fact:
+      local_build_lines: "{{ local_build_lines + compile['pre_configure'] }}"
+    when: ("'pre_configure' in compile") and (compile['pre_configure'].0 is defined)
+  - name: "{{ compile.label|upper }} - Merge configure steps (if present)"
+    set_fact:
+      local_build_lines: "{{ local_build_lines + compile['configure'] }}"
+    when: ("'configure' in compile") and (compile['configure'].0 is defined)
+  - name: "{{ compile.label|upper }} - Merge post_configure steps (if present)"
+    set_fact:
+      local_build_lines: "{{ local_build_lines + compile['post_configure'] }}"
+    when: ("'post_configure' in compile") and (compile['post_configure'].0 is defined)
+  - name: "{{ compile.label|upper }} - Write config.ansible"
+    ansible.builtin.copy:
+      dest: "{{ local_source_path }}/config.ansible"
+      content: "{{ local_build_lines | join('\n') }}"
+      owner: root
+      group: root
+      mode: '0700'
+    register: local_config_ansible
+
+# configure and build
+- block:
+  - name: "{{ compile.label|upper }} - run pre-configure steps"
+    command: "{{ item }}"
+    args: 
+      chdir: "{{ local_source_path }}"
+    with_items: 
+      - "{{ compile['pre_configure'] }}"
+    when: ("'pre_configure' in compile") and (compile['pre_configure'].0 is defined)
+  - name: "{{ compile.label|upper }} - run configure steps"
+    command: "{{ item }}"
+    args: 
+      chdir: "{{ local_source_path }}"
+    with_items: 
+      - "{{ compile['configure'] }}"
+    when: ("'configure' in compile") and (compile['configure'].0 is defined)
+  - name: "{{ compile.label|upper }} - run post configure steps"
+    command: "{{ item }}"
+    args: 
+      chdir: "{{ local_source_path }}"
+    with_items: 
+      - "{{ compile['post_configure'] }}"
+    when: ("'post_configure' in compile") and (compile['post_configure'].0 is defined)
+  when: local_config_ansible.changed
