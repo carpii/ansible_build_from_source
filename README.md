@@ -8,6 +8,13 @@ The task file is platform agnostic, but the examples just happen to target CentO
 
 Do what you want with it, but contributions very welcome
 
+### Basic operation:
+
+- Downloads source archive (only if not already present)
+- Extracts the archive (only if not already extracted)
+- Creates or updates `config.ansible` in source dir (to record current build procedure)
+- Runs full compile and install steps (only if required)
+
 ### Example Usage:
 
 ````
@@ -29,20 +36,36 @@ Do what you want with it, but contributions very welcome
         - "make install"
 ````
 
-### Var usage:
+### var definitions:
 
-````
-compile:
-  label: arbitrary text label - only used for display purposes in ansible output 
-  source_version: to build remote archive url, to name source directory, to determine if version has changed since last compile
-  source_base_name: to build remote archive url, to name source directory once archive is extracted
-  source_archive_extension: to build remote archive url (allows any extension supported by `ansible.builtin.unarchive`)
-  source_base_url: url prefix used to build remote tar url 
-  pre_configure (optional): 
-    list of commands to execute before configuring 
-  configure: 
-    list of one or more commands to execute to configure source (usually just the `./configure` line)
-  post_configure (optional): 
-    list of commands to build source, usually `make`, `make install` etc
-````
+`label (required)` 
+   
+   arbitrary text label - only used for display purposes in ansible output 
 
+`source_version (required)`
+
+   used to build remote archive url, name source directory,  determine if version has changed since last compile
+
+`source_base_name (required)`
+
+   used to build remote archive url, to name source directory once archive is extracted
+
+`source_archive_extension (required)`
+
+   used to build remote archive url (any extension supported by `ansible.builtin.unarchive`)
+
+`source_base_url (required)`
+
+   url prefix used to build remote tar url 
+
+`pre_configure (optional)`
+
+   list of commands to execute before configuring 
+    
+`configure (optional)`
+
+   list of one or more commands to execute to configure source (usually just the `./configure` line)
+    
+`post_configure (optional)`
+
+   list of commands to build source, usually `make`, `make install` etc
