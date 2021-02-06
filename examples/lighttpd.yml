@@ -1,0 +1,69 @@
+# install prequisitie packages
+- block:
+  - name: Installing lighttpd dependencies
+    yum:
+      name: ['pcre-devel', 'bzip2-devel', 'zlib-devel']
+      update_cache: yes
+  - name: Installing lighttpd dependencies 
+    yum:
+      name: ['lua-devel']
+      update_cache: yes
+  when: ansible_facts['os_family'] == 'RedHat' and ansible_facts['distribution_major_version'] == '7'
+
+# build lighttpd from source
+- import_tasks: build_from_source.yml
+  vars:
+    compile: 
+      label: 'lighttpd'
+      source_version: '1.4.55'
+      source_base_name: 'lighttpd-[VERSION]'
+      source_archive_extension: 'tar.gz'
+      source_base_url: 'https://download.lighttpd.net/lighttpd/releases-1.4.x/'
+      configure: 
+        - "./configure --prefix=/usr/local --disable-ipv6 --with-lua"
+      post_configure: 
+        - "make"
+        - "make install"
+  
+# setup post build environment  
+- name: Add lighttpd user
+  user:
+    name: lighttpd
+    comment: lighttpd user account
+    shell: /sbin/nologin
+    create_home: no
+    state: present
+
+- name: Create /etc/lighttpd 
+  file:
+    path: /etc/lighttpd
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: deploy lighttpd config ({{ lighttpd_config_src }})
+  copy: 
+    src: "{{ lighttpd_config_src }}"
+    dest: /etc/lighttpd/lighttpd.conf
+    mode: '0644'
+    owner: root
+    group: root
+
+- name: Create lighttpd log dir
+  file:
+    path: /var/log/lighttpd
+    state: directory
+    mode: '0755'
+    owner: lighttpd
+    group: lighttpd
+
+- name: deploy lighttpd logrotate
+  copy: 
+    src: etc/logrotate.d/lighttpd
+    dest: /etc/logrotate.d/
+    mode: '0644'
+    owner: root
+    group: root
+
+# deploy serverstatus?

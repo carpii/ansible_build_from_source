@@ -1,0 +1,49 @@
+# install prequisitie packages
+- block: 
+  - name: Install centos 7 packages for PHP compile
+    package:
+      name:
+        - autoconf
+        - automake
+        - libtool
+        - bison
+        - make
+        - sqlite-devel
+        - curl-devel
+        - libxml2-devel
+        - pkgconfig
+        - libmcrypt-devel
+        - libpng-devel
+        - libjpeg-turbo-devel
+        - bzip2-devel
+        - openssl-devel
+        - freetype-devel
+        - libicu-devel
+      state: present
+  - name: Install centos 7 packages (powertools repo)
+    yum:
+      name: oniguruma-devel
+      state: present
+  when: ansible_facts['os_family'] == 'RedHat' and ansible_facts['distribution_major_version'] == '7'
+
+# build php from source
+- import_tasks: build_from_source.yml
+  vars:
+    compile: 
+      source_version: '7.4.13'
+      source_base_name: 'php-[VERSION]'
+      source_archive_extension: 'tar.gz'
+      source_base_url: 'https://www.php.net/distributions'
+      pre_configure: 
+        - "./buildconf --force"
+      configure: 
+        - "./configure --with-config-file-path=/etc --sysconfdir=/etc --with-config-file-scan-dir=/etc/php.d --with-zlib --with-curl --with-zlib-dir=/usr/local/lib --with-pear=/usr/share/pear --enable-mbstring=shared --enable-inline-optimization --enable-sockets --enable-mbstring=shared --disable-ipv6 --disable-dom --without-gdbm --with-openssl --with-pdo-mysql --prefix=/usr/local --enable-opcache"
+      post_configure: 
+        - "make"
+        - "make install"
+
+# deploy php.ini 
+- name: Deploy php.ini from {{ php_ini_file_src }}
+  copy:
+    src: '{{ php_ini_file_src }}'
+    dest: "/etc/php.ini"
